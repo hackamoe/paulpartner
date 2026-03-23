@@ -287,7 +287,7 @@ export default function Portal() {
           ) : activeFile?.mimeType === 'text/html' ? (
             <iframe
               ref={iframeRef}
-              srcDoc={fileContent}
+              
               className={styles.viewerIframe}
               sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
               title={activeFile.name}
@@ -295,7 +295,7 @@ export default function Portal() {
           ) : activeFile?.mimeType.includes('image') ? (
             <div className={styles.imageWrap}>
               <img
-                src={`/api/files/${activeFile.id}`}
+                src={`/api/files/${activeFile.id}/html`}
                 alt={activeFile.name}
                 className={styles.viewerImage}
               />
