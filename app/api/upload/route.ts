@@ -22,10 +22,6 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    const { PassThrough } = await import('stream')
-    const stream = new PassThrough()
-    stream.end(buffer)
-
     const res = await drive.files.create({
       requestBody: {
         name: file.name,
@@ -33,7 +29,7 @@ export async function POST(req: NextRequest) {
       },
       media: {
         mimeType: file.type || 'application/octet-stream',
-        body: stream,
+        body: buffer,
       },
       fields: 'id, name, mimeType, size, modifiedTime, webViewLink',
     })
