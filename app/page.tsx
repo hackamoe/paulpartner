@@ -289,7 +289,7 @@ export default function Portal() {
               ref={iframeRef}
               srcDoc={fileContent}
               className={styles.viewerIframe}
-              sandbox="allow-scripts allow-same-origin"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
               title={activeFile.name}
             />
           ) : activeFile?.mimeType.includes('image') ? (
