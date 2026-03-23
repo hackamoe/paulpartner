@@ -21,17 +21,23 @@ export async function POST(req: NextRequest) {
     const token = await auth.getAccessToken()
 
     const bytes = await file.arrayBuffer()
-    const metadata = JSON.stringify({ name: file.name, parents: [process.env.GOOGLE_DRIVE_FOLDER_ID] })
+    const metadata = JSON.stringify({
+      name: file.name,
+      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
+    })
 
     const body = new FormData()
     body.append('metadata', new Blob([metadata], { type: 'application/json' }))
     body.append('file', new Blob([bytes], { type: file.type || 'application/octet-stream' }))
 
-    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token.token}` },
-      body,
-    })
+    const res = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,mimeType,size,modifiedTime',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token.token}` },
+        body,
+      }
+    )
 
     const data = await res.json()
     return NextResponse.json({ file: data })
