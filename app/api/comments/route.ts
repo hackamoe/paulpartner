@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/kv'
 
 export interface Comment {
   id: string
