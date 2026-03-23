@@ -17,24 +17,24 @@ export async function POST(req: NextRequest) {
       key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
       scopes: ['https://www.googleapis.com/auth/drive'],
     })
-    const drive = google.drive({ version: 'v3', auth })
+    await auth.authorize()
+    const token = await auth.getAccessToken()
 
     const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
+    const metadata = JSON.stringify({ name: file.name, parents: [process.env.GOOGLE_DRIVE_FOLDER_ID] })
 
-    const res = await drive.files.create({
-      requestBody: {
-        name: file.name,
-        parents: [process.env.GOOGLE_DRIVE_FOLDER_ID!],
-      },
-      media: {
-        mimeType: file.type || 'application/octet-stream',
-        body: buffer,
-      },
-      fields: 'id, name, mimeType, size, modifiedTime, webViewLink',
+    const body = new FormData()
+    body.append('metadata', new Blob([metadata], { type: 'application/json' }))
+    body.append('file', new Blob([bytes], { type: file.type || 'application/octet-stream' }))
+
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token.token}` },
+      body,
     })
 
-    return NextResponse.json({ file: res.data })
+    const data = await res.json()
+    return NextResponse.json({ file: data })
   } catch (err: any) {
     console.error('Upload error:', err?.message || err)
     return NextResponse.json({ error: 'Upload fehlgeschlagen', detail: err?.message }, { status: 500 })
