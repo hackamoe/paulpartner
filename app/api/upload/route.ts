@@ -43,7 +43,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Upload fehlgeschlagen' }, { status: 500 })
   }
 }
-
-export const config = {
-  api: { bodyParser: false },
-}
