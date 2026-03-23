@@ -22,8 +22,9 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    const { Readable } = await import('stream')
-    const stream = Readable.from(buffer)
+    const { PassThrough } = await import('stream')
+    const stream = new PassThrough()
+    stream.end(buffer)
 
     const res = await drive.files.create({
       requestBody: {
@@ -38,12 +39,8 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ file: res.data })
-  } catch (err) {
-    console.error('Upload error:', err)
-    return NextResponse.json({ error: 'Upload fehlgeschlagen' }, { status: 500 })
+  } catch (err: any) {
+    console.error('Upload error:', err?.message || err)
+    return NextResponse.json({ error: 'Upload fehlgeschlagen', detail: err?.message }, { status: 500 })
   }
-}
-
-export const config = {
-  api: { bodyParser: false },
 }
