@@ -24,6 +24,14 @@ interface Comment {
   createdAt: string
 }
 
+interface Link {
+  id: string
+  name: string
+  url: string
+  createdAt: string
+  addedBy: string
+}
+
 type View = 'login' | 'files' | 'viewer'
 
 export default function Portal() {
@@ -41,6 +49,13 @@ export default function Portal() {
   const [uploadProgress, setUploadProgress] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Links
+  const [links, setLinks] = useState<Link[]>([])
+  const [showAddLink, setShowAddLink] = useState(false)
+  const [newLinkName, setNewLinkName] = useState('')
+  const [newLinkUrl, setNewLinkUrl] = useState('')
+  const [linkLoading, setLinkLoading] = useState(false)
 
   const [activeFile, setActiveFile] = useState<DriveFile | null>(null)
   const [activeMeta, setActiveMeta] = useState<FileMeta | null>(null)
@@ -61,7 +76,7 @@ export default function Portal() {
 
   useEffect(() => {
     fetch('/api/files').then(r => {
-      if (r.ok) { setView('files'); loadFiles() }
+      if (r.ok) { setView('files'); loadFiles(); loadLinks() }
     })
   }, [])
 
@@ -75,7 +90,7 @@ export default function Portal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
       })
-      if (res.ok) { setView('files'); loadFiles() }
+      if (res.ok) { setView('files'); loadFiles(); loadLinks() }
       else setLoginError('Falsches Passwort.')
     } finally { setLoginLoading(false) }
   }
@@ -94,6 +109,39 @@ export default function Portal() {
       metas.forEach((m, i) => { if (m.meta) metaMap[fileList[i].id] = m.meta })
       setFileMetas(metaMap)
     } finally { setFilesLoading(false) }
+  }
+
+  async function loadLinks() {
+    const res = await fetch('/api/links')
+    const data = await res.json()
+    setLinks(data.links || [])
+  }
+
+  async function addLink(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newLinkName.trim() || !newLinkUrl.trim()) return
+    setLinkLoading(true)
+    try {
+      const res = await fetch('/api/links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newLinkName, url: newLinkUrl, addedBy: 'Daniel' }),
+      })
+      const data = await res.json()
+      setLinks(prev => [data.link, ...prev])
+      setNewLinkName('')
+      setNewLinkUrl('')
+      setShowAddLink(false)
+    } finally { setLinkLoading(false) }
+  }
+
+  async function deleteLink(id: string) {
+    await fetch('/api/links', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    setLinks(prev => prev.filter(l => l.id !== id))
   }
 
   async function handleUpload(fileList: FileList | null) {
@@ -202,6 +250,11 @@ export default function Portal() {
     return `${n} B`
   }
 
+  function getDomain(url: string) {
+    try { return new URL(url).hostname.replace('www.', '') }
+    catch { return url }
+  }
+
   const filtered = files.filter(f => {
     const meta = fileMetas[f.id]
     const s = search.toLowerCase()
@@ -210,6 +263,7 @@ export default function Portal() {
       meta?.description?.toLowerCase().includes(s)
   })
 
+  // ─── LOGIN ───
   if (view === 'login') {
     return (
       <div className={styles.loginWrap}>
@@ -230,6 +284,7 @@ export default function Portal() {
     )
   }
 
+  // ─── FILE BROWSER ───
   if (view === 'files') {
     return (
       <div className={styles.filesWrap}>
@@ -245,60 +300,128 @@ export default function Portal() {
           </div>
         </div>
 
-        <div className={styles.filesBody}>
-          <div
-            className={`${styles.uploadZone} ${dragOver ? styles.uploadZoneDrag : ''}`}
-            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={e => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files) }}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }}
-              onChange={e => handleUpload(e.target.files)} />
-            {uploading
-              ? <span className={styles.uploadStatus}>{uploadProgress}</span>
-              : <span className={styles.uploadHint}>
-                  <span className={styles.uploadIcon}>↑</span>
-                  Dateien hier reinziehen oder klicken — landen direkt in Google Drive
-                </span>
-            }
-          </div>
+        <div className={styles.filesLayout}>
+          {/* Left: Files */}
+          <div className={styles.filesMain}>
+            <div
+              className={`${styles.uploadZone} ${dragOver ? styles.uploadZoneDrag : ''}`}
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files) }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }}
+                onChange={e => handleUpload(e.target.files)} />
+              {uploading
+                ? <span className={styles.uploadStatus}>{uploadProgress}</span>
+                : <span className={styles.uploadHint}>
+                    <span className={styles.uploadIcon}>↑</span>
+                    Dateien reinziehen oder klicken — direkt in Google Drive
+                  </span>
+              }
+            </div>
 
-          <div className={styles.filesCount}>
-            {filesLoading ? 'Lade Dateien…' : `${filtered.length} Dateien`}
-          </div>
+            <div className={styles.filesCount}>
+              {filesLoading ? 'Lade Dateien…' : `${filtered.length} Dateien`}
+            </div>
 
-          {filesLoading ? (
-            <div className={styles.loading}><div className={styles.loadingDot} /></div>
-          ) : (
-            <div className={styles.fileGrid}>
-              {filtered.map(file => {
-                const meta = fileMetas[file.id]
-                return (
-                  <div key={file.id} className={styles.fileCard} onClick={() => openFile(file)}>
-                    <div className={styles.fileCardTop}>
-                      <span className={styles.fileIcon}>{getFileIcon(file.mimeType)}</span>
-                      <span className={styles.fileType}>{getFileType(file.mimeType)}</span>
+            {filesLoading ? (
+              <div className={styles.loading}><div className={styles.loadingDot} /></div>
+            ) : (
+              <div className={styles.fileGrid}>
+                {filtered.map(file => {
+                  const meta = fileMetas[file.id]
+                  return (
+                    <div key={file.id} className={styles.fileCard} onClick={() => openFile(file)}>
+                      <div className={styles.fileCardTop}>
+                        <span className={styles.fileIcon}>{getFileIcon(file.mimeType)}</span>
+                        <span className={styles.fileType}>{getFileType(file.mimeType)}</span>
+                      </div>
+                      <div className={styles.fileName}>{meta?.customName || file.name}</div>
+                      {meta?.description && <div className={styles.fileDesc}>{meta.description}</div>}
+                      <div className={styles.fileMeta}>
+                        <span>{formatDate(file.modifiedTime)}</span>
+                        {file.size && <span>{formatSize(file.size)}</span>}
+                      </div>
                     </div>
-                    <div className={styles.fileName}>{meta?.customName || file.name}</div>
-                    {meta?.description && <div className={styles.fileDesc}>{meta.description}</div>}
-                    <div className={styles.fileMeta}>
-                      <span>{formatDate(file.modifiedTime)}</span>
-                      {file.size && <span>{formatSize(file.size)}</span>}
+                  )
+                })}
+                {filtered.length === 0 && !filesLoading && (
+                  <div className={styles.empty}>Keine Dateien gefunden.</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Right: Links */}
+          <div className={styles.linksSidebar}>
+            <div className={styles.linksHeader}>
+              <span className={styles.linksTitle}>Links</span>
+              <button className={styles.addLinkBtn} onClick={() => setShowAddLink(v => !v)}>
+                {showAddLink ? '✕' : '+ Link'}
+              </button>
+            </div>
+
+            {showAddLink && (
+              <form onSubmit={addLink} className={styles.addLinkForm}>
+                <input
+                  className={styles.linkInput}
+                  placeholder="Name des Links"
+                  value={newLinkName}
+                  onChange={e => setNewLinkName(e.target.value)}
+                  autoFocus
+                />
+                <input
+                  className={styles.linkInput}
+                  placeholder="https://..."
+                  value={newLinkUrl}
+                  onChange={e => setNewLinkUrl(e.target.value)}
+                />
+                <button type="submit" className={styles.linkSubmitBtn} disabled={linkLoading}>
+                  {linkLoading ? '…' : 'Hinzufügen'}
+                </button>
+              </form>
+            )}
+
+            <div className={styles.linksList}>
+              {links.length === 0 ? (
+                <p className={styles.noLinks}>Noch keine Links.</p>
+              ) : links.map(link => (
+                <a
+                  key={link.id}
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles.linkItem}
+                >
+                  <div className={styles.linkItemLeft}>
+                    <div className={styles.linkFavicon}>
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${getDomain(link.url)}&sz=16`}
+                        width={14} height={14} alt=""
+                        onError={e => (e.currentTarget.style.display = 'none')}
+                      />
+                    </div>
+                    <div>
+                      <div className={styles.linkName}>{link.name}</div>
+                      <div className={styles.linkDomain}>{getDomain(link.url)}</div>
                     </div>
                   </div>
-                )
-              })}
-              {filtered.length === 0 && !filesLoading && (
-                <div className={styles.empty}>Keine Dateien gefunden.</div>
-              )}
+                  <button
+                    className={styles.deleteLinkBtn}
+                    onClick={e => { e.preventDefault(); e.stopPropagation(); deleteLink(link.id) }}
+                    title="Löschen"
+                  >×</button>
+                </a>
+              ))}
             </div>
-          )}
+          </div>
         </div>
       </div>
     )
   }
 
+  // ─── VIEWER ───
   return (
     <div className={styles.viewerWrap}>
       <div className={styles.viewerTopbar}>
@@ -310,7 +433,7 @@ export default function Portal() {
               onKeyDown={e => { if (e.key === 'Enter') saveMeta(); if (e.key === 'Escape') setEditingName(false) }}
               autoFocus />
           ) : (
-            <span className={styles.viewerFileNameText} onClick={() => setEditingName(true)} title="Klicken zum Bearbeiten">
+            <span className={styles.viewerFileNameText} onClick={() => setEditingName(true)}>
               {activeMeta?.customName || activeFile?.name}
               <span className={styles.editHint}> ✎</span>
             </span>
@@ -338,7 +461,7 @@ export default function Portal() {
                 onKeyDown={e => { if (e.key === 'Enter') saveMeta(); if (e.key === 'Escape') setEditingDesc(false) }}
                 placeholder="Kurze Beschreibung…" autoFocus />
             ) : (
-              <span className={styles.descText} onClick={() => setEditingDesc(true)} title="Klicken zum Bearbeiten">
+              <span className={styles.descText} onClick={() => setEditingDesc(true)}>
                 {activeMeta?.description || <span className={styles.descPlaceholder}>+ Beschreibung hinzufügen</span>}
                 <span className={styles.editHint}> ✎</span>
               </span>
@@ -355,9 +478,7 @@ export default function Portal() {
               <img src={`/api/files/${activeFile.id}`} alt={activeFile?.name} className={styles.viewerImage} />
             </div>
           ) : (
-            <div className={styles.rawContent}>
-              <pre>Vorschau nicht verfügbar</pre>
-            </div>
+            <div className={styles.rawContent}><pre>Vorschau nicht verfügbar</pre></div>
           )}
         </div>
 
