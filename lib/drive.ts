@@ -20,17 +20,17 @@ export interface DriveFile {
 
 export async function listFiles(): Promise<DriveFile[]> {
   const drive = getDriveClient()
-  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
+  const driveId = process.env.GOOGLE_DRIVE_FOLDER_ID
 
   const res = await drive.files.list({
-    q: `'${folderId}' in parents and trashed = false`,
+    q: `trashed = false and mimeType != 'application/vnd.google-apps.folder'`,
     fields: 'files(id, name, mimeType, size, modifiedTime, webViewLink)',
     orderBy: 'modifiedTime desc',
     pageSize: 100,
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
     corpora: 'drive',
-    driveId: folderId,
+    driveId: driveId,
   })
 
   return (res.data.files as DriveFile[]) || []
